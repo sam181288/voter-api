@@ -1,11 +1,9 @@
 package api
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"strconv"
+	"time"
 
 	"drexel.edu/todo/db"
 	"github.com/gofiber/fiber/v2"
@@ -13,17 +11,17 @@ import (
 
 // The api package creates and maintains a reference to the data handler
 // this is a good design practice
-type ToDoAPI struct {
-	db *db.ToDo
+type VoterAPI struct {
+	db *db.VoterList
 }
 
-func New() (*ToDoAPI, error) {
-	dbHandler, err := db.New()
+func New() (*VoterAPI, error) {
+	dbHandler, err := db.NewVoterList()
 	if err != nil {
 		return nil, err
 	}
 
-	return &ToDoAPI{db: dbHandler}, nil
+	return &VoterAPI{db: dbHandler}, nil
 }
 
 //Below we implement the API functions.  Some of the framework
@@ -37,220 +35,160 @@ func New() (*ToDoAPI, error) {
 //   4) How to return an error code and abort the request.  This is
 //	  done using the c.AbortWithStatus() function
 
-// implementation for GET /todo
+// implementation for GET /voters
 // returns all todos
-func (td *ToDoAPI) ListAllTodos(c *fiber.Ctx) error {
+func (td *VoterAPI) ListAllVoters(c *fiber.Ctx) error {
 
-	todoList, err := td.db.GetAllItems()
+	voterList, err := td.db.GetAllVoters()
 	if err != nil {
-		log.Println("Error Getting All Items: ", err)
+		log.Println("Error Getting All Voters: ", err)
 		return fiber.NewError(http.StatusNotFound,
-			"Error Getting All Items")
-	}
-	//Note that the database returns a nil slice if there are no items
-	//in the database.  We need to convert this to an empty slice
-	//so that the JSON marshalling works correctly.  We want to return
-	//an empty slice, not a nil slice. This will result in the json being []
-	if todoList == nil {
-		todoList = make([]db.ToDoItem, 0)
+			"Error Getting All Voters")
 	}
 
-	return c.JSON(todoList)
+	if voterList == nil {
+		voterList = make([]db.Voter, 0)
+		//todoList = make([]db.ToDoItem, 0)
+	}
+
+	return c.JSON(voterList)
 }
 
-// implementation for GET /v2/todo
-// returns todos that are either done or not done
-// depending on the value of the done query parameter
-// for example, /v2/todo?done=true will return all
-// todos that are done.  Note you can have multiple
-// query parameters, for example /v2/todo?done=true&foo=bar
-func (td *ToDoAPI) ListSelectTodos(c *fiber.Ctx) error {
-	//lets first load the data
-	todoList, err := td.db.GetAllItems()
-	if err != nil {
-		log.Println("Error Getting Database Items: ", err)
-		return fiber.NewError(http.StatusNotFound)
-	}
-	//If the database is empty, make an empty slice so that the
-	//JSON marshalling works correctly
-	if todoList == nil {
-		todoList = make([]db.ToDoItem, 0)
-	}
-
-	//Note that the query parameter is a string, so we
-	//need to convert it to a bool
-	doneS := c.Query("done")
-
-	//if the doneS is empty, then we will return all items
-	if doneS == "" {
-		return c.JSON(todoList)
-	}
-
-	//Now we can handle the case where doneS is not empty
-	//and we need to filter the list based on the doneS value
-
-	done, err := strconv.ParseBool(doneS)
-	if err != nil {
-		log.Println("Error converting done to bool: ", err)
-		return fiber.NewError(http.StatusBadRequest)
-	}
-
-	//Now we need to filter the list based on the done value
-	//that was passed in.  We will create a new slice and
-	//only add items that match the done value
-	var filteredList []db.ToDoItem
-	for _, item := range todoList {
-		if item.IsDone == done {
-			filteredList = append(filteredList, item)
-		}
-	}
-
-	//Note that the database returns a nil slice if there are no items
-	//in the database.  We need to convert this to an empty slice
-	//so that the JSON marshalling works correctly.  We want to return
-	//an empty slice, not a nil slice. This will result in the json being []
-	if filteredList == nil {
-		filteredList = make([]db.ToDoItem, 0)
-	}
-
-	return c.JSON(filteredList)
-}
-
-// implementation for GET /todo/:id
+// implementation for GET /voters/:id
 // returns a single todo
-func (td *ToDoAPI) GetToDo(c *fiber.Ctx) error {
+func (td *VoterAPI) GetVoterByID(c *fiber.Ctx) error {
 
-	//Note go is minimalistic, so we have to get the
-	//id parameter using the Param() function, and then
-	//convert it to an int64 using the strconv package
 	id, err := c.ParamsInt("id")
 	if err != nil {
 		return fiber.NewError(http.StatusBadRequest)
 	}
+	//Convert the int to an uint
+	idUint := uint(id)
 
-	//Note that ParseInt always returns an int64, so we have to
-	//convert it to an int before we can use it.
-	todoItem, err := td.db.GetItem(id)
+	todoItem, err := td.db.GetVoter(idUint)
 	if err != nil {
 		log.Println("Item not found: ", err)
 		return fiber.NewError(http.StatusNotFound)
 	}
 
-	//Git will automatically convert the struct to JSON
-	//and set the content-type header to application/json
 	return c.JSON(todoItem)
 }
 
 // implementation for POST /todo
 // adds a new todo
-func (td *ToDoAPI) AddToDo(c *fiber.Ctx) error {
-	var todoItem db.ToDoItem
+func (td *VoterAPI) AddVoter(c *fiber.Ctx) error {
+	var voter db.Voter
 
-	//With HTTP based APIs, a POST request will usually
-	//have a body that contains the data to be added
-	//to the database.  The body is usually JSON, so
-	//we need to bind the JSON to a struct that we
-	//can use in our code.
-	//This framework exposes the raw body via c.Request.Body
-	//but it also provides a helper function BodyParser
-	//that will extract the body, convert it to JSON and
-	//bind it to a struct for us.  It will also report an error
-	//if the body is not JSON or if the JSON does not match
-	//the struct we are binding to.
-	if err := c.BodyParser(&todoItem); err != nil {
+	if err := c.BodyParser(&voter); err != nil {
 		log.Println("Error binding JSON: ", err)
 		return fiber.NewError(http.StatusBadRequest)
 	}
 
-	if err := td.db.AddItem(todoItem); err != nil {
+	if err := td.db.AddVoter(voter); err != nil {
 		log.Println("Error adding item: ", err)
 		return fiber.NewError(http.StatusInternalServerError)
 	}
 
-	return c.JSON(todoItem)
+	return c.JSON(voter)
 }
 
-// implementation for PUT /todo
-// Web api standards use PUT for Updates
-func (td *ToDoAPI) UpdateToDo(c *fiber.Ctx) error {
-	var todoItem db.ToDoItem
-	if err := c.BodyParser(&todoItem); err != nil {
-		log.Println("Error binding JSON: ", err)
-		return fiber.NewError(http.StatusBadRequest)
-	}
-
-	if err := td.db.UpdateItem(todoItem); err != nil {
-		log.Println("Error updating item: ", err)
-		return fiber.NewError(http.StatusInternalServerError)
-	}
-
-	return c.JSON(todoItem)
-}
-
-// implementation for DELETE /todo/:id
-// deletes a todo
-func (td *ToDoAPI) DeleteToDo(c *fiber.Ctx) error {
+// immplementation for GET /voters/:id/polls - Gets the JUST the voter history for the voter with VoterID = :id
+func (td *VoterAPI) GetVoterPolls(c *fiber.Ctx) error {
 	id, err := c.ParamsInt("id")
 	if err != nil {
 		return fiber.NewError(http.StatusBadRequest)
 	}
+	//Convert the int to an uint
+	idUint := uint(id)
 
-	if err := td.db.DeleteItem(id); err != nil {
-		log.Println("Error deleting item: ", err)
+	voter, err := td.db.GetVoter(idUint)
+	if err != nil {
+		log.Println("Error getting voter: ", err)
+		return fiber.NewError(http.StatusNotFound)
+	}
+
+	return c.JSON(voter.VoteHistory)
+}
+
+// implementation for GET /voters/:id/polls/:pollid - Gets JUST the single voter poll data with PollID = :id and VoterID = :id
+func (td *VoterAPI) GetVoterPollById(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	idUint := uint(id)
+
+	pollid, err := c.ParamsInt("pollid")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	pollidUint := uint(pollid)
+
+	voter, err := td.db.GetVoter(idUint)
+	if err != nil {
+		log.Println("Error getting voter: ", err)
+		return fiber.NewError(http.StatusNotFound)
+	}
+
+	for _, poll := range voter.VoteHistory {
+		if poll.PollId == pollidUint {
+			return c.JSON(poll)
+		}
+	}
+
+	return fiber.NewError(http.StatusNotFound)
+}
+
+// implementation for POST /voters/:id/polls/:pollid - adds one to the "database"
+func (td *VoterAPI) AddVoterPollById(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	idUint := uint(id)
+
+	pollid, err := c.ParamsInt("pollid")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	pollidUint := uint(pollid)
+
+	voter, err := td.db.GetVoter(idUint)
+	if err != nil {
+		log.Println("Error getting voter: ", err)
+		return fiber.NewError(http.StatusNotFound)
+	}
+
+	voter.VoteHistory = append(voter.VoteHistory, db.VoterHistory{PollId: pollidUint, VoteId: idUint, VoteDate: time.Now()})
+
+	if err := td.db.UpdateVoter(voter); err != nil {
+		log.Println("Error updating voter: ", err)
 		return fiber.NewError(http.StatusInternalServerError)
 	}
 
-	return c.Status(http.StatusOK).SendString("Delete OK")
+	return c.JSON(voter)
 }
 
-// implementation for DELETE /todo
-// deletes all todos
-func (td *ToDoAPI) DeleteAllToDo(c *fiber.Ctx) error {
-
-	if err := td.db.DeleteAll(); err != nil {
-		log.Println("Error deleting all items: ", err)
+// implementation for DELETE /voters
+func (td *VoterAPI) DeleteAllVoters(c *fiber.Ctx) error {
+	err := td.db.DeleteAllVoters()
+	if err != nil {
+		log.Println("Error deleting all voters: ", err)
 		return fiber.NewError(http.StatusInternalServerError)
 	}
 
-	return c.Status(http.StatusOK).SendString("Delete All OK")
-}
-
-/*   SPECIAL HANDLERS FOR DEMONSTRATION - CRASH SIMULATION AND HEALTH CHECK */
-
-// implementation for GET /crash
-// This simulates a crash to show some of the benefits of the
-// gin framework
-func (td *ToDoAPI) CrashSim(c *fiber.Ctx) error {
-	//panic() is go's version of throwing an exception
-	//note with recover middleware this will not end program
-	panic("Simulating an unexpected crash")
-}
-
-func (td *ToDoAPI) CrashSim2(c *fiber.Ctx) error {
-	//A stupid crash simulation example
-	i := 0
-	j := 1 / i
-	jStr := fmt.Sprintf("%d", j)
-	return c.Status(http.StatusOK).
-		JSON(fiber.Map{
-			"val_j": jStr,
-		})
-}
-
-func (td *ToDoAPI) CrashSim3(c *fiber.Ctx) error {
-	//A stupid crash simulation example
-	os.Exit(10)
-	return c.Status(http.StatusOK).
-		JSON(fiber.Map{
-			"error": "will never get here, nothing you can do about this",
-		})
+	return c.SendStatus(http.StatusOK)
 }
 
 // implementation of GET /health. It is a good practice to build in a
 // health check for your API.  Below the results are just hard coded
 // but in a real API you can provide detailed information about the
 // health of your API with a Health Check
-func (td *ToDoAPI) HealthCheck(c *fiber.Ctx) error {
+func (td *VoterAPI) HealthCheck(c *fiber.Ctx) error {
 	return c.Status(http.StatusOK).
 		JSON(fiber.Map{
 			"status":             "ok",
