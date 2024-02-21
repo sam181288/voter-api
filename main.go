@@ -44,6 +44,8 @@ func main() {
 	app.Get("/voters/:id<int>/polls", apiHandler.GetVoterPolls)
 	app.Get("/voters/:id<int>/polls/:pollid<int>", apiHandler.GetVoterPollById)
 	app.Post("/voters/:id<int>/polls/:pollid<int>", apiHandler.AddVoterPollById)
+	app.Put("/voters/:id<int>", apiHandler.UpdateVoter)
+	app.Put("/voters/:id<int>/polls/:pollid<int>", apiHandler.UpdateVoterPollById)
 	app.Delete("/voters", apiHandler.DeleteAllVoters)
 	app.Get("/voters/health", apiHandler.HealthCheck)
 

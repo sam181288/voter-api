@@ -65,13 +65,13 @@ func (td *VoterAPI) GetVoterByID(c *fiber.Ctx) error {
 	//Convert the int to an uint
 	idUint := uint(id)
 
-	todoItem, err := td.db.GetVoter(idUint)
+	voter, err := td.db.GetVoter(idUint)
 	if err != nil {
 		log.Println("Item not found: ", err)
 		return fiber.NewError(http.StatusNotFound)
 	}
 
-	return c.JSON(todoItem)
+	return c.JSON(voter)
 }
 
 // implementation for POST /todo
@@ -184,6 +184,58 @@ func (td *VoterAPI) DeleteAllVoters(c *fiber.Ctx) error {
 	return c.SendStatus(http.StatusOK)
 }
 
+// implementation got PUT /voters/:id
+func (td *VoterAPI) UpdateVoter(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	idUint := uint(id)
+	voter, err := td.db.GetVoter(idUint)
+	if err != nil {
+		log.Println("Error getting voter: ", err)
+		return fiber.NewError(http.StatusNotFound)
+	}
+	//update the voter
+	if err := c.BodyParser(&voter); err != nil {
+		log.Println("Error binding JSON: ", err)
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	return c.SendStatus(http.StatusOK)
+}
+
+// implementation got PUT /voters/:id/polls/:pollId
+func (td *VoterAPI) UpdateVoterPollById(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	pollId, err := c.ParamsInt("pollId")
+	if err != nil {
+		return fiber.NewError(http.StatusBadRequest)
+	}
+	//Convert the int to an uint
+	idUint := uint(id)
+	pollIdUint := uint(pollId)
+	voter, err := td.db.GetVoter(idUint)
+	if err != nil {
+		log.Println("Error getting voter: ", err)
+		return fiber.NewError(http.StatusNotFound)
+	}
+	//update the voter poll
+	for i, poll := range voter.VoteHistory {
+		if poll.PollId == pollIdUint {
+			if err := c.BodyParser(&voter.VoteHistory[i]); err != nil {
+				log.Println("Error binding JSON: ", err)
+				return fiber.NewError(http.StatusBadRequest)
+			}
+			break
+		}
+	}
+	return c.SendStatus(http.StatusOK)
+}
+
 // implementation of GET /health. It is a good practice to build in a
 // health check for your API.  Below the results are just hard coded
 // but in a real API you can provide detailed information about the
@@ -193,7 +245,7 @@ func (td *VoterAPI) HealthCheck(c *fiber.Ctx) error {
 		JSON(fiber.Map{
 			"status":             "ok",
 			"version":            "1.0.0",
-			"uptime":             100,
+			"uptime":             time.Since(time.Now()),
 			"users_processed":    1000,
 			"errors_encountered": 10,
 		})
